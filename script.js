@@ -22,6 +22,9 @@ class ImageProcessor {
 
         // 处理按钮
         document.getElementById('processBtn').addEventListener('click', this.processImages.bind(this));
+
+        // 尺寸调整相关事件
+        this.setupResizeEventListeners();
     }
 
     setupSliders() {
@@ -38,6 +41,75 @@ class ImageProcessor {
         webpQualitySlider.addEventListener('input', (e) => {
             webpQualityValue.textContent = e.target.value + '%';
         });
+    }
+
+    setupResizeEventListeners() {
+        // 预设尺寸选择
+        const resizePreset = document.getElementById('resizePreset');
+        const customSizeSection = document.getElementById('customSizeSection');
+        const customWidth = document.getElementById('customWidth');
+        const customHeight = document.getElementById('customHeight');
+        const maintainAspectRatio = document.getElementById('maintainAspectRatio');
+
+        // 预设尺寸变化时更新自定义尺寸输入框
+        resizePreset.addEventListener('change', (e) => {
+            const preset = e.target.value;
+            if (preset !== 'custom') {
+                const [width, height] = this.getPresetDimensions(preset);
+                customWidth.value = width;
+                customHeight.value = height;
+            }
+        });
+
+        // 保持宽高比功能
+        let originalAspectRatio = 1;
+        let isUpdatingFromWidth = false;
+        let isUpdatingFromHeight = false;
+
+        customWidth.addEventListener('input', (e) => {
+            if (maintainAspectRatio.checked && !isUpdatingFromHeight) {
+                isUpdatingFromWidth = true;
+                const width = parseInt(e.target.value) || 0;
+                const height = Math.round(width / originalAspectRatio);
+                customHeight.value = height;
+                isUpdatingFromWidth = false;
+            }
+        });
+
+        customHeight.addEventListener('input', (e) => {
+            if (maintainAspectRatio.checked && !isUpdatingFromWidth) {
+                isUpdatingFromHeight = true;
+                const height = parseInt(e.target.value) || 0;
+                const width = Math.round(height * originalAspectRatio);
+                customWidth.value = width;
+                isUpdatingFromHeight = false;
+            }
+        });
+
+        // 当图片加载时计算原始宽高比
+        this.calculateOriginalAspectRatio = () => {
+            if (this.files.length > 0) {
+                const img = new Image();
+                img.onload = () => {
+                    originalAspectRatio = img.width / img.height;
+                };
+                img.src = URL.createObjectURL(this.files[0]);
+            }
+        };
+    }
+
+    getPresetDimensions(preset) {
+        const presetMap = {
+            '1920x1080': [1920, 1080],
+            '1280x720': [1280, 720],
+            '800x600': [800, 600],
+            '640x480': [640, 480],
+            '320x240': [320, 240],
+            'square': [1000, 1000], // 正方形，可以根据需要调整
+            'portrait': [900, 1200], // 3:4 比例
+            'landscape': [1200, 900] // 4:3 比例
+        };
+        return presetMap[preset] || [800, 600];
     }
 
     handleDragOver(e) {
@@ -65,6 +137,7 @@ class ImageProcessor {
     addFiles(newFiles) {
         this.files = [...this.files, ...newFiles];
         this.updateFileList();
+        this.calculateOriginalAspectRatio();
     }
 
     updateFileList() {
@@ -90,8 +163,9 @@ class ImageProcessor {
         const compressOption = document.getElementById('compressOption').checked;
         const convertOption = document.getElementById('convertOption').checked;
         const webpOption = document.getElementById('webpOption').checked;
+        const resizeOption = document.getElementById('resizeOption').checked;
 
-        if (!compressOption && !convertOption && !webpOption) {
+        if (!compressOption && !convertOption && !webpOption && !resizeOption) {
             alert('请至少选择一个处理选项');
             return;
         }
@@ -106,9 +180,14 @@ class ImageProcessor {
                     compress: compressOption,
                     convert: convertOption,
                     webp: webpOption,
+                    resize: resizeOption,
                     quality: parseInt(document.getElementById('qualitySlider').value),
                     webpQuality: parseInt(document.getElementById('webpQualitySlider').value),
-                    targetFormat: document.getElementById('targetFormat').value
+                    targetFormat: document.getElementById('targetFormat').value,
+                    resizeMode: document.getElementById('resizeMode').value,
+                    resizePreset: document.getElementById('resizePreset').value,
+                    customWidth: parseInt(document.getElementById('customWidth').value) || 0,
+                    customHeight: parseInt(document.getElementById('customHeight').value) || 0
                 });
                 results.push(result);
             }
@@ -176,6 +255,19 @@ class ImageProcessor {
                         });
                     }
 
+                    // 尺寸调整
+                    if (options.resize) {
+                        const resizeCanvas = await this.resizeImage(canvas, options);
+                        const resizeBlob = await this.canvasToBlob(resizeCanvas, options.quality);
+                        results.push({
+                            type: 'resized',
+                            blob: resizeBlob,
+                            originalSize: originalSize,
+                            newSize: resizeBlob.size,
+                            filename: this.generateFilename(file.name, 'resized', 'jpeg')
+                        });
+                    }
+
                     resolve({
                         originalFile: file,
                         results: results
@@ -229,6 +321,90 @@ class ImageProcessor {
             canvas.toBlob((blob) => {
                 resolve(blob);
             }, 'image/webp', quality / 100);
+        });
+    }
+
+    async resizeImage(canvas, options) {
+        const { resizeMode, resizePreset, customWidth, customHeight } = options;
+        
+        // 获取目标尺寸
+        let targetWidth, targetHeight;
+        if (resizePreset === 'custom') {
+            targetWidth = customWidth;
+            targetHeight = customHeight;
+        } else {
+            [targetWidth, targetHeight] = this.getPresetDimensions(resizePreset);
+        }
+
+        if (targetWidth <= 0 || targetHeight <= 0) {
+            throw new Error('请设置有效的目标尺寸');
+        }
+
+        const originalWidth = canvas.width;
+        const originalHeight = canvas.height;
+
+        // 创建新的画布
+        const newCanvas = document.createElement('canvas');
+        const newCtx = newCanvas.getContext('2d');
+
+        if (resizeMode === 'scale') {
+            // 等比例缩放
+            const scale = Math.min(targetWidth / originalWidth, targetHeight / originalHeight);
+            const newWidth = Math.round(originalWidth * scale);
+            const newHeight = Math.round(originalHeight * scale);
+
+            newCanvas.width = newWidth;
+            newCanvas.height = newHeight;
+
+            // 使用高质量的图像平滑
+            newCtx.imageSmoothingEnabled = true;
+            newCtx.imageSmoothingQuality = 'high';
+
+            newCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+        } else if (resizeMode === 'crop') {
+            // 居中裁剪
+            newCanvas.width = targetWidth;
+            newCanvas.height = targetHeight;
+
+            // 计算缩放比例，使图片至少填满目标尺寸
+            const scale = Math.max(targetWidth / originalWidth, targetHeight / originalHeight);
+            const scaledWidth = Math.round(originalWidth * scale);
+            const scaledHeight = Math.round(originalHeight * scale);
+
+            // 计算裁剪的起始位置（居中）
+            const cropX = (scaledWidth - targetWidth) / 2;
+            const cropY = (scaledHeight - targetHeight) / 2;
+
+            // 使用高质量的图像平滑
+            newCtx.imageSmoothingEnabled = true;
+            newCtx.imageSmoothingQuality = 'high';
+
+            // 先绘制缩放后的图片
+            newCtx.drawImage(canvas, 0, 0, scaledWidth, scaledHeight);
+            
+            // 然后裁剪到目标尺寸
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = targetWidth;
+            tempCanvas.height = targetHeight;
+            
+            tempCtx.drawImage(
+                newCanvas,
+                cropX, cropY, targetWidth, targetHeight,
+                0, 0, targetWidth, targetHeight
+            );
+            
+            return tempCanvas;
+        }
+
+        return newCanvas;
+    }
+
+    canvasToBlob(canvas, quality) {
+        return new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+                resolve(blob);
+            }, 'image/jpeg', quality / 100);
         });
     }
 
@@ -300,7 +476,8 @@ class ImageProcessor {
         const typeMap = {
             'compressed': '图片压缩',
             'converted': '格式转换',
-            'webp': 'WebP转换'
+            'webp': 'WebP转换',
+            'resized': '尺寸调整'
         };
         return typeMap[type] || type;
     }

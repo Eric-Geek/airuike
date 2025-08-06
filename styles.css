@@ -352,4 +352,79 @@ header p {
     .upload-area h3 {
         font-size: 1.3rem;
     }
+}
+
+/* 尺寸调整功能样式 */
+.resize-mode,
+.resize-presets {
+    margin-bottom: 15px;
+}
+
+.resize-mode select,
+.resize-presets select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: white;
+    font-size: 0.9rem;
+    margin-top: 5px;
+}
+
+.custom-size {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.size-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.size-input {
+    display: flex;
+    flex-direction: column;
+}
+
+.size-input label {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.size-input input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 0.9rem;
+}
+
+.size-input input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.aspect-ratio {
+    margin-top: 10px;
+}
+
+.aspect-ratio .checkbox-container {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+
+.aspect-ratio .checkmark {
+    width: 16px;
+    height: 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .size-inputs {
+        grid-template-columns: 1fr;
+    }
 } 

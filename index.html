@@ -69,6 +69,59 @@
                         <input type="range" id="webpQualitySlider" min="10" max="100" value="85">
                     </div>
                 </div>
+
+                <div class="option-card">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="resizeOption">
+                        <span class="checkmark"></span>
+                        <i class="fas fa-expand-arrows-alt"></i>
+                        <span>尺寸调整</span>
+                    </label>
+                    <div class="option-details">
+                        <div class="resize-mode">
+                            <label>调整模式:</label>
+                            <select id="resizeMode">
+                                <option value="scale">等比例缩放</option>
+                                <option value="crop">居中裁剪</option>
+                            </select>
+                        </div>
+                        
+                        <div class="resize-presets">
+                            <label>预设尺寸:</label>
+                            <select id="resizePreset">
+                                <option value="custom">自定义尺寸</option>
+                                <option value="1920x1080">1920x1080 (Full HD)</option>
+                                <option value="1280x720">1280x720 (HD)</option>
+                                <option value="800x600">800x600</option>
+                                <option value="640x480">640x480</option>
+                                <option value="320x240">320x240</option>
+                                <option value="square">正方形 (1:1)</option>
+                                <option value="portrait">竖屏 (3:4)</option>
+                                <option value="landscape">横屏 (4:3)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="custom-size" id="customSizeSection">
+                            <div class="size-inputs">
+                                <div class="size-input">
+                                    <label>宽度 (px):</label>
+                                    <input type="number" id="customWidth" min="1" max="5000" placeholder="宽度">
+                                </div>
+                                <div class="size-input">
+                                    <label>高度 (px):</label>
+                                    <input type="number" id="customHeight" min="1" max="5000" placeholder="高度">
+                                </div>
+                            </div>
+                            <div class="aspect-ratio">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="maintainAspectRatio" checked>
+                                    <span class="checkmark"></span>
+                                    <span>保持宽高比</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <button id="processBtn" class="process-btn">
