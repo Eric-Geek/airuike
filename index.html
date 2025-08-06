@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片处理工具 - 压缩/转换/WebP</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-image"></i> 图片处理工具</h1>
+            <p>支持图片压缩、格式转换和WebP转换</p>
+        </header>
+
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h3>拖拽图片到这里或点击选择</h3>
+                <p>支持 JPG, PNG, GIF, BMP, TIFF 等格式</p>
+                <input type="file" id="fileInput" accept="image/*" multiple>
+            </div>
+        </div>
+
+        <div class="options-section">
+            <h3><i class="fas fa-cogs"></i> 处理选项</h3>
+            
+            <div class="options-grid">
+                <div class="option-card">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="compressOption" checked>
+                        <span class="checkmark"></span>
+                        <i class="fas fa-compress"></i>
+                        <span>图片压缩</span>
+                    </label>
+                    <div class="option-details">
+                        <label>压缩质量: <span id="qualityValue">80%</span></label>
+                        <input type="range" id="qualitySlider" min="10" max="100" value="80">
+                    </div>
+                </div>
+
+                <div class="option-card">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="convertOption">
+                        <span class="checkmark"></span>
+                        <i class="fas fa-exchange-alt"></i>
+                        <span>格式转换</span>
+                    </label>
+                    <div class="option-details">
+                        <select id="targetFormat">
+                            <option value="jpeg">JPEG</option>
+                            <option value="png">PNG</option>
+                            <option value="webp">WebP</option>
+                            <option value="gif">GIF</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="option-card">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="webpOption">
+                        <span class="checkmark"></span>
+                        <i class="fas fa-globe"></i>
+                        <span>WebP转换</span>
+                    </label>
+                    <div class="option-details">
+                        <label>WebP质量: <span id="webpQualityValue">85%</span></label>
+                        <input type="range" id="webpQualitySlider" min="10" max="100" value="85">
+                    </div>
+                </div>
+            </div>
+
+            <button id="processBtn" class="process-btn">
+                <i class="fas fa-magic"></i>
+                开始处理
+            </button>
+        </div>
+
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <h3><i class="fas fa-download"></i> 处理结果</h3>
+            <div id="resultsContainer"></div>
+        </div>
+
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>正在处理图片...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
