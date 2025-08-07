@@ -90,10 +90,17 @@ class ImageProcessor {
         this.calculateOriginalAspectRatio = () => {
             if (this.files.length > 0) {
                 const img = new Image();
+                const objectUrl = URL.createObjectURL(this.files[0]);
                 img.onload = () => {
                     originalAspectRatio = img.width / img.height;
+                    // 释放内存
+                    URL.revokeObjectURL(objectUrl);
                 };
-                img.src = URL.createObjectURL(this.files[0]);
+                img.onerror = () => {
+                    // 出错时也要释放内存
+                    URL.revokeObjectURL(objectUrl);
+                };
+                img.src = objectUrl;
             }
         };
     }
@@ -156,7 +163,7 @@ class ImageProcessor {
 
     async processImages() {
         if (this.files.length === 0) {
-            alert('请先选择图片文件');
+            this.showNotification('请先选择图片文件', 'warning');
             return;
         }
 
@@ -166,36 +173,80 @@ class ImageProcessor {
         const resizeOption = document.getElementById('resizeOption').checked;
 
         if (!compressOption && !convertOption && !webpOption && !resizeOption) {
-            alert('请至少选择一个处理选项');
+            this.showNotification('请至少选择一个处理选项', 'warning');
             return;
         }
 
         this.showLoading(true);
+        this.updateProgress(0, `准备处理 ${this.files.length} 个文件...`);
 
         try {
             const results = [];
+            const failedFiles = [];
+            const totalFiles = this.files.length;
             
-            for (const file of this.files) {
-                const result = await this.processSingleImage(file, {
-                    compress: compressOption,
-                    convert: convertOption,
-                    webp: webpOption,
-                    resize: resizeOption,
-                    quality: parseInt(document.getElementById('qualitySlider').value),
-                    webpQuality: parseInt(document.getElementById('webpQualitySlider').value),
-                    targetFormat: document.getElementById('targetFormat').value,
-                    resizeMode: document.getElementById('resizeMode').value,
-                    resizePreset: document.getElementById('resizePreset').value,
-                    customWidth: parseInt(document.getElementById('customWidth').value) || 0,
-                    customHeight: parseInt(document.getElementById('customHeight').value) || 0
-                });
-                results.push(result);
+            for (let i = 0; i < this.files.length; i++) {
+                const file = this.files[i];
+                const progress = Math.round((i / totalFiles) * 100);
+                this.updateProgress(progress, `正在处理: ${file.name} (${i + 1}/${totalFiles})`);
+                
+                try {
+                    // 验证文件大小和类型
+                    if (file.size > 50 * 1024 * 1024) { // 50MB
+                        throw new Error('文件过大，请选择小于50MB的图片');
+                    }
+                    
+                    if (!file.type.startsWith('image/')) {
+                        throw new Error('不支持的文件类型');
+                    }
+                    
+                    const result = await this.processSingleImage(file, {
+                        compress: compressOption,
+                        convert: convertOption,
+                        webp: webpOption,
+                        resize: resizeOption,
+                        quality: parseInt(document.getElementById('qualitySlider').value),
+                        webpQuality: parseInt(document.getElementById('webpQualitySlider').value),
+                        targetFormat: document.getElementById('targetFormat').value,
+                        resizeMode: document.getElementById('resizeMode').value,
+                        resizePreset: document.getElementById('resizePreset').value,
+                        customWidth: parseInt(document.getElementById('customWidth').value) || 0,
+                        customHeight: parseInt(document.getElementById('customHeight').value) || 0
+                    });
+                    results.push(result);
+                } catch (fileError) {
+                    console.error(`处理文件 ${file.name} 失败:`, fileError);
+                    failedFiles.push({
+                        file: file,
+                        error: fileError.message
+                    });
+                }
             }
 
-            this.displayResults(results);
+            this.updateProgress(100, '处理完成！');
+            
+            // 延迟一下显示完成状态
+            setTimeout(() => {
+                this.displayResults(results);
+                
+                // 显示处理结果通知
+                if (failedFiles.length === 0) {
+                    this.showNotification(`成功处理了 ${results.length} 个文件！`, 'success');
+                } else if (results.length > 0) {
+                    this.showNotification(
+                        `成功处理了 ${results.length} 个文件，${failedFiles.length} 个文件处理失败`, 
+                        'warning', 
+                        8000
+                    );
+                    // 显示失败详情
+                    console.warn('失败的文件:', failedFiles);
+                } else {
+                    this.showNotification('所有文件处理失败，请检查文件格式和大小', 'error', 10000);
+                }
+            }, 500);
         } catch (error) {
             console.error('处理图片时出错:', error);
-            alert('处理图片时出错: ' + error.message);
+            this.showNotification('处理图片时出错: ' + error.message, 'error', 8000);
         } finally {
             this.showLoading(false);
         }
@@ -207,8 +258,13 @@ class ImageProcessor {
             const ctx = canvas.getContext('2d');
             const img = new Image();
 
+            const objectUrl = URL.createObjectURL(file);
+            
             img.onload = async () => {
                 try {
+                    // 释放内存
+                    URL.revokeObjectURL(objectUrl);
+                    
                     // 设置画布尺寸
                     canvas.width = img.width;
                     canvas.height = img.height;
@@ -266,20 +322,44 @@ class ImageProcessor {
                             newSize: resizeBlob.size,
                             filename: this.generateFilename(file.name, 'resized', 'jpeg')
                         });
+                        // 清理resize canvas
+                        this.cleanCanvas(resizeCanvas);
                     }
+
+                    // 清理主canvas
+                    this.cleanCanvas(canvas);
 
                     resolve({
                         originalFile: file,
                         results: results
                     });
                 } catch (error) {
+                    URL.revokeObjectURL(objectUrl);
+                    this.cleanCanvas(canvas);
                     reject(error);
                 }
             };
 
-            img.onerror = () => reject(new Error('无法加载图片'));
-            img.src = URL.createObjectURL(file);
+            img.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                this.cleanCanvas(canvas);
+                reject(new Error('无法加载图片'));
+            };
+            img.src = objectUrl;
         });
+    }
+
+    // Canvas内存清理方法
+    cleanCanvas(canvas) {
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            // 重置尺寸来释放内存
+            canvas.width = 0;
+            canvas.height = 0;
+        }
     }
 
     compressImage(canvas, quality) {
@@ -337,7 +417,7 @@ class ImageProcessor {
         }
 
         if (targetWidth <= 0 || targetHeight <= 0) {
-            throw new Error('请设置有效的目标尺寸');
+            throw new Error('请设置有效的目标尺寸（宽度和高度必须大于0）');
         }
 
         const originalWidth = canvas.width;
@@ -368,33 +448,23 @@ class ImageProcessor {
 
             // 计算缩放比例，使图片至少填满目标尺寸
             const scale = Math.max(targetWidth / originalWidth, targetHeight / originalHeight);
-            const scaledWidth = Math.round(originalWidth * scale);
-            const scaledHeight = Math.round(originalHeight * scale);
+            const scaledWidth = originalWidth * scale;
+            const scaledHeight = originalHeight * scale;
 
-            // 计算裁剪的起始位置（居中）
-            const cropX = (scaledWidth - targetWidth) / 2;
-            const cropY = (scaledHeight - targetHeight) / 2;
+            // 计算居中偏移量
+            const offsetX = (targetWidth - scaledWidth) / 2;
+            const offsetY = (targetHeight - scaledHeight) / 2;
 
             // 使用高质量的图像平滑
             newCtx.imageSmoothingEnabled = true;
             newCtx.imageSmoothingQuality = 'high';
 
-            // 先绘制缩放后的图片
-            newCtx.drawImage(canvas, 0, 0, scaledWidth, scaledHeight);
-            
-            // 然后裁剪到目标尺寸
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = targetWidth;
-            tempCanvas.height = targetHeight;
-            
-            tempCtx.drawImage(
-                newCanvas,
-                cropX, cropY, targetWidth, targetHeight,
-                0, 0, targetWidth, targetHeight
+            // 直接绘制缩放和居中的图片
+            newCtx.drawImage(
+                canvas,
+                0, 0, originalWidth, originalHeight,
+                offsetX, offsetY, scaledWidth, scaledHeight
             );
-            
-            return tempCanvas;
         }
 
         return newCanvas;
@@ -482,6 +552,24 @@ class ImageProcessor {
         return typeMap[type] || type;
     }
 
+    updateProgress(percentage, message) {
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const loadingText = document.getElementById('loadingText');
+        
+        if (progressFill) {
+            progressFill.style.width = percentage + '%';
+        }
+        
+        if (progressText) {
+            progressText.textContent = percentage + '%';
+        }
+        
+        if (loadingText && message) {
+            loadingText.textContent = message;
+        }
+    }
+
     showLoading(show) {
         const loading = document.getElementById('loading');
         const processBtn = document.getElementById('processBtn');
@@ -489,11 +577,68 @@ class ImageProcessor {
         if (show) {
             loading.style.display = 'flex';
             processBtn.disabled = true;
+            // 重置进度
+            this.updateProgress(0, '准备处理...');
         } else {
             loading.style.display = 'none';
             processBtn.disabled = false;
         }
     }
+
+    // 通知系统
+    showNotification(message, type = 'info', duration = 5000) {
+        const notification = document.getElementById('notification');
+        const messageEl = notification.querySelector('.notification-message');
+        const iconEl = notification.querySelector('.notification-icon');
+        
+        // 设置消息
+        messageEl.textContent = message;
+        
+        // 设置图标
+        let iconClass = 'fas fa-info-circle';
+        switch (type) {
+            case 'success':
+                iconClass = 'fas fa-check-circle';
+                break;
+            case 'error':
+                iconClass = 'fas fa-exclamation-triangle';
+                break;
+            case 'warning':
+                iconClass = 'fas fa-exclamation-circle';
+                break;
+        }
+        iconEl.className = `notification-icon ${iconClass}`;
+        
+        // 设置样式
+        notification.className = `notification ${type}`;
+        notification.style.display = 'block';
+        
+        // 自动隐藏
+        if (duration > 0) {
+            setTimeout(() => {
+                this.hideNotification();
+            }, duration);
+        }
+    }
+
+    hideNotification() {
+        const notification = document.getElementById('notification');
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => {
+            notification.style.display = 'none';
+            notification.style.animation = 'slideIn 0.3s ease-out';
+        }, 300);
+    }
+}
+
+// 全局函数供HTML调用
+function hideNotification() {
+    const notification = document.getElementById('notification');
+    notification.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => {
+        notification.style.display = 'none';
+        notification.style.animation = 'slideIn 0.3s ease-out';
+    }, 300);
 }
 
 // 初始化应用
